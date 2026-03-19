@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK (debug)
 on:
   workflow_dispatch:
 
@@ -6,27 +6,54 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - name: Debug — mostrar infos do repositório
+        run: |
+          echo "=== CURRENT DIR ==="
+          pwd
+          echo
+          echo "=== LIST ROOT (ls -la) ==="
+          ls -la
+          echo
+          echo "=== FIND first 3 levels ==="
+          find . -maxdepth 3 -mindepth 1 -print
+          echo
+          echo "=== GIT tracked files (top) ==="
+          git ls-files | sed -n '1,200p'
+          echo
+          echo "=== check if buildozer.spec exists and show head (if present) ==="
+          if [ -f buildozer.spec ]; then
+            echo "buildozer.spec found in repo root — first 60 lines:"
+            sed -n '1,60p' buildozer.spec
+          else
+            echo "buildozer.spec NOT found in repo root"
+          fi
 
-      - name: Install Dependencies
+      - name: Set PATH
+        run: |
+          echo 'export PATH=$PATH:$HOME/.local/bin' >> $GITHUB_ENV
+
+      - name: Install minimal deps & buildozer
         run: |
           sudo apt update
-          sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev  cmake libffi-dev libssl-dev
+          sudo apt install -y python3-pip zip unzip openjdk-17-jdk
           pip install --user --upgrade Cython==0.29.33 buildozer
 
-      - name: Build APK with Buildozer
+      - name: Attempt build (only if spec exists)
         run: |
-          export PATH=$PATH:$HOME/.local/bin
-          yes | buildozer -v android debug
-        continue-on-error: false
+          echo "PWD: $(pwd)"
+          if [ -f buildozer.spec ]; then
+            export PATH=$PATH:$HOME/.local/bin
+            yes | buildozer -v android debug
+          else
+            echo "Aborting build: buildozer.spec missing"
+            exit 2
+          fi
 
-      - name: Upload APK
+      - name: Upload APK (if exists)
         uses: actions/upload-artifact@v4
         with:
           name: enzo_app_debug
-          path: bin/*.apk
+          path: bin/.apk
